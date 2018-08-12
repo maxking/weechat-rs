@@ -57,13 +57,32 @@ const CONNECTION: &'static str = "ws://127.0.0.1:8100/weechat";
 // }
 
 
-// struct WeeChatMessage {
-//     body_length: u32,
-//     compressed: bool,
-//     identifier: &str,
-//     obj_type: &str,
-//     obj: &str,
-// }
+struct WeeChatMessage<'a> {
+    body_length: u32,
+    compressed: bool,
+    identifier: &'a str,
+}
+
+
+impl<'a> TryRead<'a, Endian> for WeeChatMessage<'a> {
+
+    fn try_read(bytes: &'a [u8], endian: Endian) -> Result<(Self, usize)>  {
+        let offset = &mut 0;
+        let body_len = bytes.read_with::<u32>(offset, endian)?;
+        let compressed = bytes.read::<bool>(offset)?;
+
+        let id_length = bytes.read_with::<u32>(offset, endian)? as usize;
+        let id = bytes.read_with::<&str>(offset, Str::Len(id_length))?;
+
+        let message = WeeChatMessage {
+            body_length: body_len,
+            compressed: compressed,
+            identifier: id,
+        };
+
+        Ok((message, *offset))
+    }
+}
 
 
 struct WeeChatHeader {
@@ -75,6 +94,7 @@ impl<'a> TryRead<'a, Endian> for WeeChatHeader {
 
     fn try_read(bytes: &'a [u8], endian: Endian) -> Result<(Self, usize)> {
         let offset = &mut 0;
+
         let header = WeeChatHeader {
             body_length: bytes.read_with::<u32>(offset, BE)?,
             compressed: bytes.read::<bool>(offset)?,
@@ -108,7 +128,7 @@ pub fn connect() {
     };
 
 
-    let _ = match sender.send_message(&OwnedMessage::Text("info version\n".to_string())) {
+    let _ = match sender.send_message(&OwnedMessage::Text("(1) info version\n".to_string())) {
         Ok(()) => (println!("Requesting version.")),
         Err(err) => println!("Initialization Error: {:?}", err),
     };
@@ -125,9 +145,11 @@ pub fn connect() {
     let recv_loop = thread::spawn(move || {
         for message in receiver.incoming_dataframes() {
             // println!("Got response: {:?}", message.unwrap());
-            let header: WeeChatHeader =  message.unwrap().data.read_with(&mut 0, BE).unwrap();
-            println!("Total length of response: {:?}", header.body_length);
-            println!("Response is compressed: {:?}", header.compressed);
+            let message_data = message.unwrap().data;
+            let weemessage: WeeChatMessage =  message_data.read_with(&mut 0, BE).unwrap();
+            println!("Total length of response: {:?}", weemessage.body_length);
+            println!("Response is compressed: {:?}", weemessage.compressed);
+            println!("Message identifier: {:?}", weemessage.identifier);
         }
     });
 
