@@ -1,0 +1,14 @@
+[package]
+name = "weechat-rs"
+version = "0.1.0"
+authors = ["Abhilash Raj <raj.abhilash1@gmail.com>"]
+license = "Apache 2.0"
+repository = "https://github.com/maxking/weechat-rs"
+readme = "README.md"
+
+[dependencies]
+gtk = { version = "0.1", features = ["v3_16"]}
+gdk = { version = "0.5" }
+encoding = "0.2"
+websocket = "0.20.3"
+byte = "0.2"
