@@ -131,14 +131,14 @@ fn parse_objects_fn<'a>(input: &'a [u8], hdata_keys: &HdataKeys, hpath: &str, po
 
     for key in hdata_keys.keys.iter() {
         let parse_fn = match key[1] {
-            "int" => {println!("Found int"); parse_int},
-            "chr" => {println!("Found chr"); parse_chr},
-            "str" => {println!("Found str"); parse_str},
-            "ptr" => {println!("Found ptr"); parse_pointer},
-            "lng" => {println!("Found long"); parse_long},
-            "buf" => {println!("Found buf"); parse_buf},
-            "arr" => {println!("Found arr"); parse_arr},
-            "tim" => {println!("Found time"); parse_time},
+            "int" => parse_int,
+            "chr" => parse_chr,
+            "str" => parse_str,
+            "ptr" => parse_pointer,
+            "lng" => parse_long,
+            "buf" => parse_buf,
+            "arr" => parse_arr,
+            "tim" => parse_time,
             _     => panic!("Unexpected datatype."),
         };
 
@@ -310,19 +310,19 @@ fn parse_arr_objects<'a>(input: &'a [u8], objtype: &str, count: u32) -> IResult<
     let mut objs = Vec::new();
 
     let parse_fn = match objtype {
-        "int" => {println!("Found int"); parse_int},
-        "lon" => {println!("Found long"); parse_long},
-        "chr" => {println!("Found chr"); parse_chr},
-        "str" => {println!("Found str"); parse_str},
-        "ptr" => {println!("Found ptr"); parse_pointer},
-        "buf" => {println!("Found buf"); parse_buf},
-        "arr" => {println!("Found arr"); parse_arr},
-        "tim" => {println!("Found time"); parse_time},
+        "int" => parse_int,
+        "lon" =>  parse_long,
+        "chr" => parse_chr,
+        "str" => parse_str,
+        "ptr" =>  parse_pointer,
+        "buf" =>  parse_buf,
+        "arr" =>  parse_arr,
+        "tim" =>  parse_time,
         "htb" => panic!("Unplemented type hash table"),
-        "hda" => panic!("Unimplemented type hda"),
-        "inf" => panic!("Unimplemented type inf"),
+        "hda" => parse_hdata,
+        "inf" => parse_info,
         "inl" => panic!("Unplemented type inl"),
-        _     => parse_str,
+        _     => panic!("Unexpected datatype: {:?}", objtype),
     };
 
     for each in [0..count].iter() {
