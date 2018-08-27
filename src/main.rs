@@ -1,4 +1,3 @@
-extern crate byte;
 extern crate gdk;
 extern crate gtk;
 extern crate websocket;
