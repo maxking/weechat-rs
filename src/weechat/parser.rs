@@ -72,7 +72,7 @@ pub enum WeechatObjects<'a> {
     WBuffer(&'a str),
     WPointer(&'a str),
     WTime(&'a str),
-    WHashTable,
+    WHashTable(u32, Vec<(WeechatObjects<'a>, WeechatObjects<'a>)>),
     WHdata(&'a str, HdataKeys<'a>, u32, Vec<(Vec<WeechatObjects<'a>>, Vec<WeechatObjects<'a>>)>),
     WInfo(&'a str, &'a str),
     WInfoList(&'a str, u32, Vec<InfolistItems<'a>>),
@@ -117,7 +117,7 @@ named!(parse_hdata_keys<HdataKeys>,
 
 
 
-fn parse_objects_fn<'a>(input: &'a [u8], hdata_keys: &HdataKeys, hpath: &str, pointers: &Vec<WeechatObjects>)
+fn parse_objects_fn<'a>(input: &'a [u8], hdata_keys: &HdataKeys<'a>, hpath: &str, pointers: &Vec<WeechatObjects>)
                      -> IResult<&'a [u8], Vec<WeechatObjects<'a>>> {
     let mut objs = Vec::new();
 
@@ -130,17 +130,9 @@ fn parse_objects_fn<'a>(input: &'a [u8], hdata_keys: &HdataKeys, hpath: &str, po
 
 
     for key in hdata_keys.keys.iter() {
-        let parse_fn = match key[1] {
-            "int" => parse_int,
-            "chr" => parse_chr,
-            "str" => parse_str,
-            "ptr" => parse_pointer,
-            "lng" => parse_long,
-            "buf" => parse_buf,
-            "arr" => parse_arr,
-            "tim" => parse_time,
-            _     => panic!("Unexpected datatype."),
-        };
+        println!("Parsing key for {}", key[1]);
+
+        let parse_fn = get_parse_fn(key[1]);
 
         let ptr = match points.pop() {
             Some(res) => res,
@@ -182,14 +174,58 @@ named!(pub parse_hdata<WeechatObjects>,
 );
 
 
-// named!(pub parse_hashtable<WeechatObjects>,
-//        do_parse!(
-//            key_type: call!(parse_type) >>
-//            val_type: call!(val_type) >>
-//            count: be_u32 >>
-//        ()
-//        )
-// )
+fn get_parse_fn<'a>(keytype: &'a str) -> Box<fn(&'a [u8]) -> IResult<&'a [u8], WeechatObjects<'a>>> {
+    let fn_type = match keytype {
+        "int" => parse_int,
+        "chr" => parse_chr,
+        "str" => parse_str,
+        "ptr" => parse_pointer,
+        "lng" => parse_long,
+        "buf" => parse_buf,
+        "arr" => parse_arr,
+        "tim" => parse_time,
+        "htb" => parse_hashtable,
+        _     => panic!("Unexpected datatype."),
+    };
+
+    Box::new(fn_type)
+}
+
+
+fn parse_key_values<'a>(input: &'a [u8], key_type: &WeechatObjects<'a>, val_type: &WeechatObjects<'a>) -> IResult<&'a [u8], (WeechatObjects<'a>, WeechatObjects<'a>)> {
+
+    let key_parse_fn = match key_type {
+        WeechatObjects::WString(val) => get_parse_fn(val),
+        _  => panic!("Keytypes are expected to only be string."),
+    };
+
+    let value_parse_fn = match val_type {
+        WeechatObjects::WString(val) => get_parse_fn(val),
+        _  => panic!("Valtypes are expected to only be string."),
+    };
+
+    let (i1, key) = match key_parse_fn(input) {
+        Ok(res) => res,
+        Err(err) => panic!("Unable to parse key {:?}", err),
+    };
+    let (i2, value) = match value_parse_fn(i1) {
+        Ok(res) => res,
+        Err(err) => panic!("Unable to parse value {:?}", err),
+    };
+
+    Ok((i2, (key, value)))
+}
+
+
+named!(pub parse_hashtable<WeechatObjects>,
+       do_parse!(
+           key_type: call!(parse_type) >>
+           val_type: call!(parse_type) >>
+           count: be_u32 >>
+           key_values: count!(apply!(parse_key_values, &key_type, &val_type), count as usize) >>
+       (WeechatObjects::WHashTable(count, key_values))
+       )
+);
 
 
 named!(pub parse_time<WeechatObjects>,
@@ -227,7 +263,8 @@ named!(parse_infolist_item<InfolistItem>,
                    "ptr" => call!(parse_pointer)|
                    "lng" => call!(parse_long)   |
                    "buf" => call!(parse_buf)    |
-                   "arr" => call!(parse_arr)
+                   "arr" => call!(parse_arr)    |
+                   "htb" => call!(parse_hashtable)
            ) >>
        (InfolistItem{name: name, value: value}))
 );
@@ -306,24 +343,10 @@ named!(pub parse_pointer<WeechatObjects>,
 );
 
 
-fn parse_arr_objects<'a>(input: &'a [u8], objtype: &str, count: u32) -> IResult<&'a [u8], Vec<WeechatObjects<'a>>> {
+fn parse_arr_objects<'a>(input: &'a [u8], objtype: &'a str, count: u32) -> IResult<&'a [u8], Vec<WeechatObjects<'a>>> {
     let mut objs = Vec::new();
 
-    let parse_fn = match objtype {
-        "int" => parse_int,
-        "lon" =>  parse_long,
-        "chr" => parse_chr,
-        "str" => parse_str,
-        "ptr" =>  parse_pointer,
-        "buf" =>  parse_buf,
-        "arr" =>  parse_arr,
-        "tim" =>  parse_time,
-        "htb" => panic!("Unplemented type hash table"),
-        "hda" => parse_hdata,
-        "inf" => parse_info,
-        "inl" => panic!("Unplemented type inl"),
-        _     => panic!("Unexpected datatype: {:?}", objtype),
-    };
+    let parse_fn = get_parse_fn(objtype);
 
     for each in [0..count].iter() {
         let result = parse_fn(input)?;
@@ -343,19 +366,3 @@ named!(pub parse_arr<WeechatObjects>,
            (WeechatObjects::WArray(objtype, objcount, objects))
        ))
 );
-
-
-// fn parse_objects(input: &[u8]) -> IResult<&[u8], &[u8]> {
-//     let result = match parse_type(input) {
-//         Ok(res) => res,
-//         Err(err) => panic!("Error parsing object type."),
-//     };
-
-//     match result.1 {
-//         "chr" => parse_chr(result.0),
-//         "int" => parse_int(result.0),
-//         "hda" => {
-//             parse_hdata(result.0)
-//         },
-//     }
-// }
