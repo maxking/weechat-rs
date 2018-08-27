@@ -2,17 +2,16 @@ use std::io::{stdin, stdout};
 use std::sync::mpsc::channel;
 use std::thread;
 
-use websocket::result::WebSocketError;
 use websocket::client::ClientBuilder;
+use websocket::result::WebSocketError;
 use websocket::{Message, OwnedMessage};
 
-use weechat::parser;
 use nom::IResult;
+use weechat::parser;
 
 const CONNECTION: &'static str = "ws://127.0.0.1:8100/weechat";
 
 pub fn connect() {
-
     println!("Connecting to {}", CONNECTION);
 
     // Create a client object to connect to the remote.
@@ -25,15 +24,14 @@ pub fn connect() {
     let _ = client.set_nodelay(true).unwrap();
     // let _ = client.set_nonblocking(true).unwrap();
 
-
     let (mut receiver, mut sender) = client.split().unwrap();
 
-
-    let _ = match sender.send_message(&OwnedMessage::Text("init compression=off,password=ab\n".to_string())) {
+    let _ = match sender.send_message(&OwnedMessage::Text(
+        "init compression=off,password=ab\n".to_string(),
+    )) {
         Ok(()) => (println!("Connected.")),
         Err(err) => println!("Initialization Error: {:?}", err),
     };
-
 
     let _ = match sender.send_message(&OwnedMessage::Text("(1) info version\n".to_string())) {
         Ok(()) => (println!("Requesting version.")),

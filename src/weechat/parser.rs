@@ -1,4 +1,4 @@
-use nom::{be_u8,be_u16,be_i32,be_u24,be_u32,be_f64,anychar,IResult,Needed};
+use nom::{anychar, be_f64, be_i32, be_u16, be_u24, be_u32, be_u8, IResult, Needed};
 use std::str;
 
 /*
@@ -58,7 +58,6 @@ named!(pub parse_identifier<WeechatId>,
        )
 );
 
-
 /*
  * All the different types of objects that Weechat relay protocol returns.
  * https://weechat.org/files/doc/stable/weechat_relay_protocol.en.html#objects
@@ -73,18 +72,20 @@ pub enum WeechatObjects<'a> {
     WPointer(&'a str),
     WTime(&'a str),
     WHashTable(u32, Vec<(WeechatObjects<'a>, WeechatObjects<'a>)>),
-    WHdata(&'a str, HdataKeys<'a>, u32, Vec<(Vec<WeechatObjects<'a>>, Vec<WeechatObjects<'a>>)>),
+    WHdata(
+        &'a str,
+        HdataKeys<'a>,
+        u32,
+        Vec<(Vec<WeechatObjects<'a>>, Vec<WeechatObjects<'a>>)>,
+    ),
     WInfo(&'a str, &'a str),
     WInfoList(&'a str, u32, Vec<InfolistItems<'a>>),
     WArray(&'a str, u32, Vec<WeechatObjects<'a>>),
 }
 
-
-named!(parse_bare_string<&str>,
-       do_parse!(
-           len: be_u32 >>
-           val: take_str!(len) >>
-       (val))
+named!(
+    parse_bare_string<&str>,
+    do_parse!(len: be_u32 >> val: take_str!(len) >> (val))
 );
 
 #[derive(Debug, PartialEq)]
@@ -105,20 +106,21 @@ impl<'a> HdataKeys<'a> {
             keys.push(values.split(":").collect::<Vec<&str>>());
         }
 
-        HdataKeys{ keys: keys }
+        HdataKeys { keys: keys }
     }
 }
 
-named!(parse_hdata_keys<HdataKeys>,
-       do_parse!(
-           name: call!(parse_bare_string) >>
-       (HdataKeys::from_raw_values(name)))
+named!(
+    parse_hdata_keys<HdataKeys>,
+    do_parse!(name: call!(parse_bare_string) >> (HdataKeys::from_raw_values(name)))
 );
 
-
-
-fn parse_objects_fn<'a>(input: &'a [u8], hdata_keys: &HdataKeys<'a>, hpath: &str, pointers: &Vec<WeechatObjects>)
-                     -> IResult<&'a [u8], Vec<WeechatObjects<'a>>> {
+fn parse_objects_fn<'a>(
+    input: &'a [u8],
+    hdata_keys: &HdataKeys<'a>,
+    hpath: &str,
+    pointers: &Vec<WeechatObjects>,
+) -> IResult<&'a [u8], Vec<WeechatObjects<'a>>> {
     let mut objs = Vec::new();
 
     let mut points = Vec::new();
@@ -127,7 +129,6 @@ fn parse_objects_fn<'a>(input: &'a [u8], hdata_keys: &HdataKeys<'a>, hpath: &str
     println!("hpath is: {:?}", hpath);
     println!("keys are: {:?}", hdata_keys);
     println!("Pointers are: {:?}", pointers);
-
 
     for key in hdata_keys.keys.iter() {
         println!("Parsing key for {}", key[1]);
@@ -144,7 +145,7 @@ fn parse_objects_fn<'a>(input: &'a [u8], hdata_keys: &HdataKeys<'a>, hpath: &str
                 points.push(remaining);
                 objs.push(val);
                 ()
-            },
+            }
             Err(err) => panic!("Error parsing: {:?}", err),
         }
     }
@@ -155,7 +156,6 @@ fn parse_objects_fn<'a>(input: &'a [u8], hdata_keys: &HdataKeys<'a>, hpath: &str
 
     Ok((ptr, objs))
 }
-
 
 named!(pub parse_hdata<WeechatObjects>,
        do_parse!(
@@ -173,8 +173,9 @@ named!(pub parse_hdata<WeechatObjects>,
        )
 );
 
-
-fn get_parse_fn<'a>(keytype: &'a str) -> Box<fn(&'a [u8]) -> IResult<&'a [u8], WeechatObjects<'a>>> {
+fn get_parse_fn<'a>(
+    keytype: &'a str,
+) -> Box<fn(&'a [u8]) -> IResult<&'a [u8], WeechatObjects<'a>>> {
     let fn_type = match keytype {
         "int" => parse_int,
         "chr" => parse_chr,
@@ -185,23 +186,25 @@ fn get_parse_fn<'a>(keytype: &'a str) -> Box<fn(&'a [u8]) -> IResult<&'a [u8], W
         "arr" => parse_arr,
         "tim" => parse_time,
         "htb" => parse_hashtable,
-        _     => panic!("Unexpected datatype."),
+        _ => panic!("Unexpected datatype."),
     };
 
     Box::new(fn_type)
 }
 
-
-fn parse_key_values<'a>(input: &'a [u8], key_type: &WeechatObjects<'a>, val_type: &WeechatObjects<'a>) -> IResult<&'a [u8], (WeechatObjects<'a>, WeechatObjects<'a>)> {
-
+fn parse_key_values<'a>(
+    input: &'a [u8],
+    key_type: &WeechatObjects<'a>,
+    val_type: &WeechatObjects<'a>,
+) -> IResult<&'a [u8], (WeechatObjects<'a>, WeechatObjects<'a>)> {
     let key_parse_fn = match key_type {
         WeechatObjects::WString(val) => get_parse_fn(val),
-        _  => panic!("Keytypes are expected to only be string."),
+        _ => panic!("Keytypes are expected to only be string."),
     };
 
     let value_parse_fn = match val_type {
         WeechatObjects::WString(val) => get_parse_fn(val),
-        _  => panic!("Valtypes are expected to only be string."),
+        _ => panic!("Valtypes are expected to only be string."),
     };
 
     let (i1, key) = match key_parse_fn(input) {
@@ -216,7 +219,6 @@ fn parse_key_values<'a>(input: &'a [u8], key_type: &WeechatObjects<'a>, val_type
     Ok((i2, (key, value)))
 }
 
-
 named!(pub parse_hashtable<WeechatObjects>,
        do_parse!(
            key_type: call!(parse_type) >>
@@ -226,7 +228,6 @@ named!(pub parse_hashtable<WeechatObjects>,
        (WeechatObjects::WHashTable(count, key_values))
        )
 );
-
 
 named!(pub parse_time<WeechatObjects>,
        do_parse!(
@@ -245,18 +246,18 @@ named!(pub parse_info<WeechatObjects>,
        (WeechatObjects::WInfo(name, version)))
 );
 
-
 #[derive(Debug, PartialEq)]
 struct InfolistItem<'a> {
     name: &'a str,
-    value: WeechatObjects<'a>
+    value: WeechatObjects<'a>,
 }
 
-named!(parse_infolist_item<InfolistItem>,
-       do_parse!(
-           namelen: be_u32 >>
-           name: take_str!(namelen) >>
-           value: switch!(take_str!(3),
+named!(
+    parse_infolist_item<InfolistItem>,
+    do_parse!(
+        namelen: be_u32 >> name: take_str!(namelen)
+            >> value:
+                switch!(take_str!(3),
                    "int" => call!(parse_int)    |
                    "chr" => call!(parse_chr)    |
                    "str" => call!(parse_str)    |
@@ -265,24 +266,29 @@ named!(parse_infolist_item<InfolistItem>,
                    "buf" => call!(parse_buf)    |
                    "arr" => call!(parse_arr)    |
                    "htb" => call!(parse_hashtable)
-           ) >>
-       (InfolistItem{name: name, value: value}))
+           ) >> (InfolistItem {
+            name: name,
+            value: value,
+        })
+    )
 );
 
 #[derive(Debug, PartialEq)]
 struct InfolistItems<'a> {
     count: u32,
-    objects: Vec<InfolistItem<'a>>
+    objects: Vec<InfolistItem<'a>>,
 }
 
-
-named!(parse_infolist_items<InfolistItems>,
-       do_parse!(
-           count: be_u32 >>
-           objects: count!(call!(parse_infolist_item), count as usize) >>
-       (InfolistItems{count: count, objects:objects}))
+named!(
+    parse_infolist_items<InfolistItems>,
+    do_parse!(
+        count: be_u32 >> objects: count!(call!(parse_infolist_item), count as usize)
+            >> (InfolistItems {
+                count: count,
+                objects: objects,
+            })
+    )
 );
-
 
 named!(pub parse_infolist<WeechatObjects>,
        do_parse!(
@@ -342,8 +348,11 @@ named!(pub parse_pointer<WeechatObjects>,
        (WeechatObjects::WPointer(strval)))
 );
 
-
-fn parse_arr_objects<'a>(input: &'a [u8], objtype: &'a str, count: u32) -> IResult<&'a [u8], Vec<WeechatObjects<'a>>> {
+fn parse_arr_objects<'a>(
+    input: &'a [u8],
+    objtype: &'a str,
+    count: u32,
+) -> IResult<&'a [u8], Vec<WeechatObjects<'a>>> {
     let mut objs = Vec::new();
 
     let parse_fn = get_parse_fn(objtype);
@@ -355,7 +364,6 @@ fn parse_arr_objects<'a>(input: &'a [u8], objtype: &'a str, count: u32) -> IResu
     }
 
     Ok((input, objs))
-
 }
 
 named!(pub parse_arr<WeechatObjects>,

@@ -1,6 +1,5 @@
-use gtk::{self, Button, Window, WindowType};
 use gtk::prelude::*;
-
+use gtk::{self, Button, Window, WindowType};
 
 pub fn launch() {
     gtk::init().unwrap_or_else(|_| panic!("weechat-rs: failed to initialize GTK."));
